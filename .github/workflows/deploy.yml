@@ -31,8 +31,5 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ap-south-1
 
-      - name: CDK Bootstrap (if needed)
-        run: cdk bootstrap
-
       - name: Deploy CDK Stack
         run: cdk deploy --require-approval never
