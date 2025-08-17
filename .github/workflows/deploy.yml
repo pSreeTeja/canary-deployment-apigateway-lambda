@@ -28,6 +28,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ap-south-1
 
       - name: CDK Bootstrap (if needed)
@@ -35,7 +36,3 @@ jobs:
 
       - name: Deploy CDK Stack
         run: cdk deploy --require-approval never
-# Instructions:
-# 1. In your GitHub repo, go to Settings > Secrets and variables > Actions.
-# 2. Add secrets named AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for an IAM user with CDK deploy permissions.
-# 3. Push to main branch to trigger deployment.
