@@ -37,13 +37,21 @@ export class CanaryDepLambdaApigatewayStack extends cdk.Stack {
     const rootIntegration = new apigateway.LambdaIntegration(lambdaAlias);
     api.root.addMethod('GET', rootIntegration);
 
-    // Create IAM role for API Gateway logging
+    // Create IAM role for API Gateway logging with custom inline policy
     const apiGwLogsRole = new iam.Role(this, 'ApiGatewayCloudWatchLogsRole', {
       assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonAPIGatewayPushToCloudWatchLogs'),
-      ],
     });
+    apiGwLogsRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogGroups',
+        'logs:DescribeLogStreams',
+      ],
+      resources: ['*'],
+    }));
 
     // Custom resource to set CloudWatch Logs role ARN for API Gateway
     new cr.AwsCustomResource(this, 'ApiGatewayAccountCloudWatchRole', {
