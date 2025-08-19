@@ -1,0 +1,14 @@
+import json
+import datetime
+import os
+
+def main(event, context):
+    return {
+        "statusCode": 200,
+        "body": json.dumps({
+            "ok": True,
+            "msg": f"Hello from canary alias at {datetime.datetime.utcnow().isoformat()}",
+            "stage": os.environ.get("STAGE")
+        }),
+        "headers": {"content-type": "application/json"}
+    }
