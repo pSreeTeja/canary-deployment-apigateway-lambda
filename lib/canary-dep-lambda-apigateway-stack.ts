@@ -4,6 +4,8 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cr from 'aws-cdk-lib/custom-resources';
 
 export class CanaryDepLambdaApigatewayStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -34,6 +36,27 @@ export class CanaryDepLambdaApigatewayStack extends cdk.Stack {
     });
     const rootIntegration = new apigateway.LambdaIntegration(lambdaAlias);
     api.root.addMethod('GET', rootIntegration);
+
+    // Create IAM role for API Gateway logging
+    const apiGwLogsRole = new iam.Role(this, 'ApiGatewayCloudWatchLogsRole', {
+      assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonAPIGatewayPushToCloudWatchLogs'),
+      ],
+    });
+
+    // Custom resource to set CloudWatch Logs role ARN for API Gateway
+    new cr.AwsCustomResource(this, 'ApiGatewayAccountCloudWatchRole', {
+      onCreate: {
+        service: 'APIGateway',
+        action: 'updateAccount',
+        parameters: {
+          cloudWatchRoleArn: apiGwLogsRole.roleArn,
+        },
+        physicalResourceId: cr.PhysicalResourceId.of('ApiGatewayAccountCloudWatchRole'),
+      },
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE}),
+    });
 
     // CloudWatch alarm for Lambda errors
     const errorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
