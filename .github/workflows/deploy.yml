@@ -1,9 +1,7 @@
 name: Deploy Canary Lambda API Stacks
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   deploy:

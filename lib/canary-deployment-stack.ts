@@ -52,7 +52,7 @@ export class CanaryDeploymentStack extends cdk.Stack {
       new apigateway.CfnDeployment(this, "CanaryDeployment", {
         restApiId: API_ID,
         deploymentCanarySettings: {
-          percentTraffic: 50,
+          percentTraffic: 10,
           stageVariableOverrides: {
             lambdaAlias: "Dev",
           },

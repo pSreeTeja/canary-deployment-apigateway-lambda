@@ -1,9 +1,7 @@
 name: Destroy Canary Lambda API Stacks
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   destroy:
@@ -31,5 +29,5 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ap-south-1
 
-      - name: Deploy CDK Stack
+      - name: Destroy CDK Stack
         run: cdk destroy all --force --require-approval never
