@@ -1,85 +1,94 @@
-import {
-  Stack,
-  StackProps,
-  CfnOutput,
-  Aws,
-  Fn,
-  RemovalPolicy,
-} from "aws-cdk-lib";
+import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
-import * as apigateway from "aws-cdk-lib/aws-apigateway";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as iam from "aws-cdk-lib/aws-iam";
+import {
+  aws_lambda as lambda_,
+  aws_apigateway as apigateway,
+  aws_iam as iam,
+  RemovalPolicy,
+  CfnOutput,
+  Fn,
+  Aws,
+} from "aws-cdk-lib";
 import * as path from "path";
 
-export class MyServerlessApplicationStack extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
+
+export class MyServerlessApplicationStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // Lambda function
-    const lambdaFn = new lambda.Function(this, "MyFunction", {
-      runtime: lambda.Runtime.PYTHON_3_9,
+    // Create Lambda function
+    const lambdaFn = new lambda_.Function(this, "MyFunction", {
+      runtime: lambda_.Runtime.PYTHON_3_9,
       handler: "index.handler",
-      code: lambda.Code.fromAsset(path.join(__dirname, "../src")),
+      code: lambda_.Code.fromAsset(path.join(__dirname, "src")),
     });
 
-    // Function version (latest code snapshot)
+    // Lambda Version
     const version = lambdaFn.currentVersion;
 
-    // Prod alias
-    const alias = new lambda.Alias(this, "LambdaAlias", {
+    // Create Lambda Alias (Prod)
+    const alias = new lambda_.Alias(this, "LambdaAlias", {
       aliasName: "Prod",
-      version,
+      version: version,
     });
 
-    // API Gateway Rest API
+    // Create Rest API
     const restApi = new apigateway.RestApi(this, "RestApi", {
       endpointTypes: [apigateway.EndpointType.REGIONAL],
       deploy: false,
       retainDeployments: false,
     });
 
-    // Initial deployment
+    // Create Deployment
     const deployment = new apigateway.Deployment(this, "Deployment", {
       api: restApi,
       retainDeployments: false,
     });
 
-    // Stage with stage variable pointing to Prod alias
-    const stage = new apigateway.Stage(this, "ProdStage", {
-      deployment,
+    // Create Prod Stage
+    const stage = new apigateway.Stage(this, "prod", {
+      deployment: deployment,
       variables: {
         lambdaAlias: "Prod",
       },
     });
+
     restApi.deploymentStage = stage;
 
-    // Integration URI using stage variable
+    // Create URI for Lambda alias
     const stageUri = `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${lambdaFn.functionArn}:\${stageVariables.lambdaAlias}/invocations`;
 
+    // Create Lambda Integration
     const integration = new apigateway.Integration({
       type: apigateway.IntegrationType.AWS_PROXY,
       integrationHttpMethod: "POST",
       uri: stageUri,
     });
 
-    // Add GET method
+    // API Gateway Method
     const method = restApi.root.addMethod("GET", integration);
 
-    // Permissions for Lambda + alias
-    lambdaFn.addPermission("LambdaPermission", {
+    // Add Lambda permissions
+    lambdaFn.addPermission("lambdaPermission", {
       action: "lambda:InvokeFunction",
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      sourceArn: method.methodArn.replace(restApi.deploymentStage.stageName, "*"),
+      sourceArn: method.methodArn.replace(
+        restApi.deploymentStage.stageName,
+        "*"
+      ),
     });
 
-    alias.addPermission("AliasPermission", {
+    // Add permissions for Prod alias
+    alias.addPermission("aliasPermission", {
       action: "lambda:InvokeFunction",
       principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      sourceArn: method.methodArn.replace(restApi.deploymentStage.stageName, "*"),
+      sourceArn: method.methodArn.replace(
+        restApi.deploymentStage.stageName,
+        "*"
+      ),
     });
 
-    // Outputs
+    // OUTPUTS
     new CfnOutput(this, "LambdaFunction", {
       exportName: "MyLambdaFunction",
       value: lambdaFn.functionArn,
