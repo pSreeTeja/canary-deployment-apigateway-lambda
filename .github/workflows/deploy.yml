@@ -32,4 +32,5 @@ jobs:
           aws-region: ap-south-1
 
       - name: Deploy CDK Stack
-        run: cdk deploy CanaryDeploymentStack --require-approval never
+        # run: cdk deploy CanaryDeploymentStack --require-approval never
+        run: cdk deploy MyServerlessApplicationStack --require-approval never
