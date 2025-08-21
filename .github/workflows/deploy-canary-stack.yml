@@ -1,4 +1,4 @@
-name: Deploy Canary Lambda API Stacks
+name: Deploy Canary Stack
 
 on:
   workflow_dispatch:
@@ -31,4 +31,3 @@ jobs:
 
       - name: Deploy CDK Stack
         run: cdk deploy CanaryDeploymentStack --require-approval never
-        # run: cdk deploy MyServerlessApplicationStack --require-approval never

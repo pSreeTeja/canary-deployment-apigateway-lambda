@@ -1,5 +1,4 @@
-name: Deploy Canary Lambda API Stacks
-
+name: Deploy Serverless App Stack
 on:
   workflow_dispatch:
 
