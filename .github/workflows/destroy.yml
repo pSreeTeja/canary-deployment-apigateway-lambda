@@ -1,4 +1,4 @@
-name: Deploy Canary Lambda API Stacks
+name: Destroy Canary Lambda API Stacks
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy:
+  destroy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -32,5 +32,4 @@ jobs:
           aws-region: ap-south-1
 
       - name: Deploy CDK Stack
-        # run: cdk deploy CanaryDeploymentStack --require-approval never
-        run: cdk deploy MyServerlessApplicationStack --require-approval never
+        run: cdk destroy all --force --require-approval never
