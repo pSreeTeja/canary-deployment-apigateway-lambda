@@ -7,7 +7,7 @@ def handler(event, context):
         "statusCode": 200,
         "body": json.dumps({
             "ok": True,
-            "msg": f"Team Belly at {datetime.datetime.utcnow().isoformat()}",
+            "msg": f"Team Conrad at {datetime.datetime.utcnow().isoformat()}",
             "stage": os.environ.get("STAGE")
         }),
         "headers": {"content-type": "application/json"}
