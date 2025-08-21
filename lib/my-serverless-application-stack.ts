@@ -20,7 +20,7 @@ export class MyServerlessApplicationStack extends cdk.Stack {
     const lambdaFn = new lambda_.Function(this, "MyFunction", {
       runtime: lambda_.Runtime.PYTHON_3_9,
       handler: "index.handler",
-      code: lambda_.Code.fromAsset(path.join(__dirname, "src")),
+      code: lambda_.Code.fromAsset(path.join(__dirname, "../src")),
     });
 
     // Lambda Version
