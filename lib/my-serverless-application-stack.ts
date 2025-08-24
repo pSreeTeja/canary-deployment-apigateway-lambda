@@ -11,7 +11,7 @@ import {
   import * as path from 'path';
   
   
-  export class CanaryStack extends Stack {
+  export class MyServerlessApplicationStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
   super(scope, id, props);
   
