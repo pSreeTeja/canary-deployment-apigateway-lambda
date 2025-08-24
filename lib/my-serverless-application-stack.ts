@@ -19,8 +19,8 @@ import {
   // 1) Lambda function (Python)
   const fn = new lambda.Function(this, 'HelloFn', {
   runtime: lambda.Runtime.PYTHON_3_12,
-  handler: 'handler.handler',
-  code: lambda.Code.fromAsset(path.join(__dirname, '../..', 'lambda')),
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset(path.join(__dirname, '../..', 'src')),
   memorySize: 256,
   timeout: Duration.seconds(10)
   });
