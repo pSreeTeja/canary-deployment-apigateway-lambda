@@ -1,109 +1,80 @@
-import * as cdk from "aws-cdk-lib";
-import { Construct } from "constructs";
 import {
-  aws_lambda as lambda_,
-  aws_apigateway as apigateway,
+  Stack,
+  StackProps,
+  aws_lambda as lambda,
   aws_iam as iam,
-  RemovalPolicy,
+  aws_apigateway as apigw,
   CfnOutput,
-  Fn,
-  Aws,
-} from "aws-cdk-lib";
-import * as path from "path";
-
-
-export class MyServerlessApplicationStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-
-    // Create Lambda function
-    const lambdaFn = new lambda_.Function(this, "MyFunction", {
-      runtime: lambda_.Runtime.PYTHON_3_9,
-      handler: "index.handler",
-      code: lambda_.Code.fromAsset(path.join(__dirname, "../src")),
-    });
-
-    // Lambda Version
-    const version = lambdaFn.currentVersion;
-
-    // Create Lambda Alias (Prod)
-    const alias = new lambda_.Alias(this, "LambdaAlias", {
-      aliasName: "Prod",
-      version: version,
-    });
-
-    // Create Rest API
-    const restApi = new apigateway.RestApi(this, "RestApi", {
-      endpointTypes: [apigateway.EndpointType.REGIONAL],
-      deploy: false,
-      retainDeployments: false,
-    });
-
-    // Create Deployment
-    const deployment = new apigateway.Deployment(this, "Deployment", {
-      api: restApi,
-      retainDeployments: false,
-    });
-
-    // Create Prod Stage
-    const stage = new apigateway.Stage(this, "prod", {
-      deployment: deployment,
-      variables: {
-        lambdaAlias: "Prod",
-      },
-    });
-
-    restApi.deploymentStage = stage;
-
-    // Create URI for Lambda alias
-    const stageUri = `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${lambdaFn.functionArn}:\${stageVariables.lambdaAlias}/invocations`;
-
-    // Create Lambda Integration
-    const integration = new apigateway.Integration({
-      type: apigateway.IntegrationType.AWS_PROXY,
-      integrationHttpMethod: "POST",
-      uri: stageUri,
-    });
-
-    // API Gateway Method
-    const method = restApi.root.addMethod("GET", integration);
-
-    // Add Lambda permissions
-    lambdaFn.addPermission("lambdaPermission", {
-      action: "lambda:InvokeFunction",
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      sourceArn: method.methodArn.replace(
-        restApi.deploymentStage.stageName,
-        "*"
-      ),
-    });
-
-    // Add permissions for Prod alias
-    alias.addPermission("aliasPermission", {
-      action: "lambda:InvokeFunction",
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      sourceArn: method.methodArn.replace(
-        restApi.deploymentStage.stageName,
-        "*"
-      ),
-    });
-
-    // OUTPUTS
-    new CfnOutput(this, "LambdaFunction", {
-      exportName: "MyLambdaFunction",
-      value: lambdaFn.functionArn,
-    });
-    new CfnOutput(this, "ApigwId", {
-      exportName: "MyAPIGWID",
-      value: restApi.restApiId,
-    });
-    new CfnOutput(this, "MethodArn", {
-      exportName: "MyMethodArn",
-      value: method.methodArn,
-    });
-    new CfnOutput(this, "StageName", {
-      exportName: "MyStageName",
-      value: restApi.deploymentStage.stageName,
-    });
+  Duration
+  } from 'aws-cdk-lib';
+  import { Construct } from 'constructs';
+  import * as path from 'path';
+  
+  
+  export class CanaryStack extends Stack {
+  constructor(scope: Construct, id: string, props?: StackProps) {
+  super(scope, id, props);
+  
+  
+  // 1) Lambda function (Python)
+  const fn = new lambda.Function(this, 'HelloFn', {
+  runtime: lambda.Runtime.PYTHON_3_12,
+  handler: 'handler.handler',
+  code: lambda.Code.fromAsset(path.join(__dirname, '../..', 'lambda')),
+  memorySize: 256,
+  timeout: Duration.seconds(10)
+  });
+  
+  
+  // 2) Publish a new version each deploy (timestamp guarantees uniqueness)
+  const newVersion = new lambda.Version(this, `Version-${Date.now()}`, {
+    lambda: fn,
+    description: `Auto version at ${new Date().toISOString()}`
+  });
+  
+  
+  // 3) Stable alias (points to initial version, won’t move unless promoted)
+  const prodAlias = new lambda.Alias(this, 'ProdAlias', {
+  aliasName: 'prod',
+  version: fn.currentVersion
+  });
+  
+  
+  // 4) Canary alias always moves to new version
+  const canaryAlias = new lambda.Alias(this, 'CanaryAlias', {
+  aliasName: 'canary',
+  version: newVersion
+  });
+  
+  
+  // 5) REST API (low-level) so we can use stage variables + explicit canary settings
+  const api = new apigw.CfnRestApi(this, 'Api', {
+  name: 'canary-api',
+  endpointConfiguration: { types: ['REGIONAL'] }
+  });
+  
+  
+  // /hello resource
+  const hello = new apigw.CfnResource(this, 'HelloResource', {
+  restApiId: api.ref,
+  parentId: api.attrRootResourceId,
+  pathPart: 'hello'
+  });
+  
+  
+  // Integration URI with stage variable to pick alias
+  const integrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${this.region}:${this.account}:function:${fn.functionName}:\\\${stageVariables.lambdaAlias}/invocations`;
+  
+  const method = new apigw.CfnMethod(this, 'HelloAnyMethod', {
+  restApiId: api.ref,
+  resourceId: hello.ref,
+  httpMethod: 'ANY',
+  authorizationType: 'NONE',
+  integration: {
+  type: 'AWS_PROXY',
+  integrationHttpMethod: 'POST',
+  uri: integrationUri
   }
+  });
+}
 }
