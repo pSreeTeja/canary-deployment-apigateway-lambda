@@ -10,7 +10,7 @@ import {
 import { Construct } from "constructs";
 import * as path from "path";
 
-export class CanaryLambdaStack extends Stack {
+export class MyServerlessApplicationStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
