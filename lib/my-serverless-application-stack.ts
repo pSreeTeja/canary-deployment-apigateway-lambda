@@ -18,7 +18,11 @@ export class MyServerlessApplicationStack extends Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "index.handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src")),
+      environment: {
+        DEPLOYMENT_TIME: new Date().toISOString(), // forces new code hash
+      },
     });
+    
 
     // 2) Explicit new version each deploy
     const newVersion = new lambda.Version(this, `Version${Date.now()}`, {
