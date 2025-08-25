@@ -19,14 +19,14 @@ export class MyServerlessApplicationStack extends Stack {
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: "index.handler",
       code: lambda.Code.fromAsset(path.join(__dirname, "../src")),
-      timeout: Duration.seconds(10),
       memorySize: 256,
+      timeout: Duration.seconds(10),
       environment: {
-        DEPLOYMENT_TICK: new Date().toISOString(),
+        DEPLOYMENT_TICK: new Date().toISOString(), // forces new version each deploy
       },
     });
 
-    // 2) Publish new version for canary
+    // 2) Publish new version (canary target)
     const canaryVersion = new lambda.Version(this, "CanaryVersion", {
       lambda: fn,
       description: `Deployed at ${new Date().toISOString()}`,
@@ -43,57 +43,38 @@ export class MyServerlessApplicationStack extends Stack {
       version: canaryVersion,
     });
 
-    // 4) API Gateway
+    // 4) API Gateway (high-level)
     const api = new apigw.RestApi(this, "RestApi", {
       restApiName: "canary-api",
-      deployOptions: {
-        stageName: "prod",
-        variables: {
-          lambdaAlias: "prod", // default = stable
-        },
-      },
     });
 
     const hello = api.root.addResource("hello");
 
-    // Integration URI using stage variable for alias
-    const integrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${this.region}:${this.account}:function:${fn.functionName}:\${stageVariables.lambdaAlias}/invocations`;
+    hello.addMethod(
+      "ANY",
+      new apigw.LambdaIntegration(fn, { proxy: true })
+    );
 
-    const method = new apigw.CfnMethod(this, "HelloAnyMethod", {
-      restApiId: api.restApiId,
-      resourceId: (hello.node.defaultChild as apigw.CfnResource).ref,
-      httpMethod: "ANY",
-      authorizationType: "NONE",
-      integration: {
-        type: "AWS_PROXY",
-        integrationHttpMethod: "POST",
-        uri: integrationUri,
-      },
-    });
-
+    // 5) Deployment (low-level CfnDeployment)
     const deployment = new apigw.CfnDeployment(this, "Deployment", {
       restApiId: api.restApiId,
     });
-    deployment.addDependency(method);
+    deployment.addDependency(hello.node.defaultChild as apigw.CfnResource);
 
-    // 5) Stage with Canary traffic
+    // 6) Stage with canary settings (low-level CfnStage)
     const stage = new apigw.CfnStage(this, "ProdStage", {
       stageName: "prod",
       restApiId: api.restApiId,
       deploymentId: deployment.ref,
-      variables: {
-        lambdaAlias: "prod",
-      },
+      variables: { lambdaAlias: "prod" }, // default traffic -> prod alias
       canarySetting: {
-        percentTraffic: 0.1, // 10% to canary
-        stageVariableOverrides: {
-          lambdaAlias: "canary",
-        },
+        percentTraffic: 0.1, // 10% canary traffic
+        stageVariableOverrides: { lambdaAlias: "canary" },
         useStageCache: false,
       },
     });
 
-    // 6) Permissions for API Gateway
+    // 7) Permissions for API Gateway
     [prodAlias, canaryAlias].forEach((alias) =>
       alias.addPermission(`InvokeByApiGW-${alias.aliasName}`, {
         principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
