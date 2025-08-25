@@ -22,11 +22,11 @@ export class MyServerlessApplicationStack extends Stack {
       timeout: Duration.seconds(10),
       memorySize: 256,
       environment: {
-        DEPLOYMENT_TICK: new Date().toISOString(), // forces version change each deploy
+        DEPLOYMENT_TICK: new Date().toISOString(),
       },
     });
 
-    // 2) Publish a new version for canary
+    // 2) Publish new version for canary
     const canaryVersion = new lambda.Version(this, "CanaryVersion", {
       lambda: fn,
       description: `Deployed at ${new Date().toISOString()}`,
@@ -40,7 +40,7 @@ export class MyServerlessApplicationStack extends Stack {
 
     const canaryAlias = new lambda.Alias(this, "CanaryAlias", {
       aliasName: "canary",
-      version: canaryVersion, // subsequent deploys: will point to new version
+      version: canaryVersion,
     });
 
     // 4) API Gateway
@@ -49,33 +49,61 @@ export class MyServerlessApplicationStack extends Stack {
       deployOptions: {
         stageName: "prod",
         variables: {
-          lambdaAlias: "prod",
+          lambdaAlias: "prod", // default = stable
         },
       },
     });
 
     const hello = api.root.addResource("hello");
 
-    hello.addMethod(
-      "ANY",
-      new apigw.LambdaIntegration(fn, { proxy: true })
+    // Integration URI using stage variable for alias
+    const integrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${this.region}:${this.account}:function:${fn.functionName}:\${stageVariables.lambdaAlias}/invocations`;
+
+    const method = new apigw.CfnMethod(this, "HelloAnyMethod", {
+      restApiId: api.restApiId,
+      resourceId: (hello.node.defaultChild as apigw.CfnResource).ref,
+      httpMethod: "ANY",
+      authorizationType: "NONE",
+      integration: {
+        type: "AWS_PROXY",
+        integrationHttpMethod: "POST",
+        uri: integrationUri,
+      },
+    });
+
+    const deployment = new apigw.CfnDeployment(this, "Deployment", {
+      restApiId: api.restApiId,
+    });
+    deployment.addDependency(method);
+
+    // 5) Stage with Canary traffic
+    const stage = new apigw.CfnStage(this, "ProdStage", {
+      stageName: "prod",
+      restApiId: api.restApiId,
+      deploymentId: deployment.ref,
+      variables: {
+        lambdaAlias: "prod",
+      },
+      canarySetting: {
+        percentTraffic: 0.1, // 10% to canary
+        stageVariableOverrides: {
+          lambdaAlias: "canary",
+        },
+        useStageCache: false,
+      },
+    });
+
+    // 6) Permissions for API Gateway
+    [prodAlias, canaryAlias].forEach((alias) =>
+      alias.addPermission(`InvokeByApiGW-${alias.aliasName}`, {
+        principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+        action: "lambda:InvokeFunction",
+        sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*/*/hello`,
+      })
     );
 
-    // 5) Permissions
-    prodAlias.addPermission("ApiGWInvokeProd", {
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      action: "lambda:InvokeFunction",
-      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*/*/hello`,
-    });
-
-    canaryAlias.addPermission("ApiGWInvokeCanary", {
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      action: "lambda:InvokeFunction",
-      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${api.restApiId}/*/*/hello`,
-    });
-
     new CfnOutput(this, "InvokeUrl", {
-      value: api.url,
+      value: `https://${api.restApiId}.execute-api.${this.region}.amazonaws.com/${stage.stageName}/hello`,
     });
   }
 }
