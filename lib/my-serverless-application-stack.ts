@@ -53,7 +53,8 @@ export class MyServerlessApplicationStack extends Stack {
     // Integration URI with stage variable to pick alias dynamically
     const integrationUri = `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${this.region}:${this.account}:function:${fn.functionName}:\\\${stageVariables.lambdaAlias}/invocations`;
 
-    new apigw.CfnMethod(this, 'HelloAnyMethod', {
+    // Method
+    const method = new apigw.CfnMethod(this, 'HelloAnyMethod', {
       restApiId: api.ref,
       resourceId: hello.ref,
       httpMethod: 'ANY',
@@ -65,10 +66,11 @@ export class MyServerlessApplicationStack extends Stack {
       },
     });
 
-    // Deployment
+    // Deployment - depends on method
     const deployment = new apigw.CfnDeployment(this, 'Deployment', {
       restApiId: api.ref,
     });
+    deployment.addDependency(method);
 
     // Stage with canary settings
     new apigw.CfnStage(this, 'Stage', {
